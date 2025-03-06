@@ -5,13 +5,6 @@
 #pragma comment(lib, "comctl32.lib")
 #include "resource.h"
 
-// Define colors like in the image
-#define COLOR_PURPLE    RGB(207, 130, 255)
-#define COLOR_CORAL     RGB(255, 131, 111)
-#define COLOR_GREEN     RGB(151, 206, 47)
-#define COLOR_BLUE      RGB(57, 175, 247)
-#define COLOR_DARK      RGB(45, 50, 55)
-
 #define MAX_EMPLOYEES 100
 #define ID_ADD_EMPLOYEE 1
 #define ID_UPDATE_EMPLOYEE 2
@@ -19,17 +12,6 @@
 #define ID_VIEW_EMPLOYEE 4
 #define ID_SEARCH_EMPLOYEE 5
 #define ID_EXIT 6
-
-// Panel handles
-HWND g_hPanel1 = NULL;
-HWND g_hPanel2 = NULL;
-HWND g_hPanel3 = NULL;
-HWND g_hPanel4 = NULL;
-HWND g_hHeader = NULL;
-
-// Font handles
-HFONT g_hFontHeader = NULL;
-HFONT g_hFontButton = NULL;
 
 typedef struct {
     wchar_t name[50];
@@ -190,41 +172,35 @@ LRESULT CALLBACK UpdateEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
     return FALSE;
 }
 
+// Updated function for SelectEmployeeDlgProc
 LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     static HWND hwndList;
-    static int action;
 
     switch (message) {
     case WM_INITDIALOG:
+        // Initialize the ListView control
         hwndList = GetDlgItem(hwndDlg, IDC_LIST1);
-        action = (int)lParam;
 
+        // Setup ListView columns
         SetupEmployeeListView(hwndList);
+
+        // Populate ListView with data
         PopulateEmployeeListView(hwndList, &employeeList);
 
         return TRUE;
+
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
+            // Get selected item from ListView instead of ListBox
             int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
 
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
-                if (action == ID_UPDATE_EMPLOYEE) {
-                    DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
-                        hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
-                }
-                else if (action == ID_DELETE_EMPLOYEE) {
-                    int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
-                    if (response == IDYES) {
-                        for (int i = index; i < employeeList.count - 1; i++) {
-                            employeeList.employees[i] = employeeList.employees[i + 1];
-                        }
-                        employeeList.count--;
-                        saveEmployeesToFile(&employeeList);
-                        MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
-                        PopulateEmployeeListView(hwndList, &employeeList);
-                    }
-                }
+                DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
+                    hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+
+                // Refresh the list after update
+                PopulateEmployeeListView(hwndList, &employeeList);
             }
             else {
                 MessageBox(hwndDlg, L"No employee selected!", L"Error", MB_OK | MB_ICONERROR);
@@ -236,32 +212,24 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
             return TRUE;
         }
         break;
+
     case WM_NOTIFY:
+        // Handle double-click on ListView item
         if (((LPNMHDR)lParam)->code == NM_DBLCLK) {
             int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
-                if (action == ID_UPDATE_EMPLOYEE) {
-                    DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
-                        hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
-                }
-                else if (action == ID_DELETE_EMPLOYEE) {
-                    int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
-                    if (response == IDYES) {
-                        for (int i = index; i < employeeList.count - 1; i++) {
-                            employeeList.employees[i] = employeeList.employees[i + 1];
-                        }
-                        employeeList.count--;
-                        saveEmployeesToFile(&employeeList);
-                        MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
-                        PopulateEmployeeListView(hwndList, &employeeList);
-                    }
-                }
+                DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
+                    hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+
+                // Refresh the list after update
+                PopulateEmployeeListView(hwndList, &employeeList);
             }
             return TRUE;
         }
         break;
     }
+
     return FALSE;
 }
 
@@ -273,17 +241,58 @@ void InitializeCommonControls() {
     InitCommonControlsEx(&icex);
 }
 
+LRESULT CALLBACK DeleteEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
+    static int id;
+    switch (message) {
+    case WM_INITDIALOG:
+        return TRUE;
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK) {
+            id = GetDlgItemInt(hwndDlg, IDC_EDIT1, NULL, FALSE);
+            for (int i = 0; i < employeeList.count; i++) {
+                if (employeeList.employees[i].id == id) {
+                    for (int j = i; j < employeeList.count - 1; j++) {
+                        employeeList.employees[j] = employeeList.employees[j + 1];
+                    }
+                    employeeList.count--;
+                    saveEmployeesToFile(&employeeList);
+                    MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
+                    EndDialog(hwndDlg, IDOK);
+                    return TRUE;
+                }
+            }
+            MessageBox(hwndDlg, L"Employee not found!", L"Error", MB_OK | MB_ICONERROR);
+            EndDialog(hwndDlg, IDCANCEL);
+            return TRUE;
+        }
+        else if (LOWORD(wParam) == IDCANCEL) {
+            EndDialog(hwndDlg, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+
+
+// Updated function for ViewEmployeesDlgProc
 LRESULT CALLBACK ViewEmployeesDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     static HWND hwndList;
 
     switch (message) {
     case WM_INITDIALOG:
+        // Initialize the ListView control
         hwndList = GetDlgItem(hwndDlg, IDC_LIST1);
 
+        // Setup ListView columns
         SetupEmployeeListView(hwndList);
+
+        // Populate ListView with data
         PopulateEmployeeListView(hwndList, &employeeList);
 
         return TRUE;
+
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
             EndDialog(hwndDlg, LOWORD(wParam));
@@ -295,26 +304,24 @@ LRESULT CALLBACK ViewEmployeesDlgProc(HWND hwndDlg, UINT message, WPARAM wParam,
     return FALSE;
 }
 
+
 LRESULT CALLBACK SearchEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     static wchar_t criteria[50];
-    static HWND hwndList;
-
+    static Employee* employee;
     switch (message) {
     case WM_INITDIALOG:
-        hwndList = GetDlgItem(hwndDlg, IDC_LIST1);
-        SetupEmployeeListView(hwndList);
         return TRUE;
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
             GetDlgItemText(hwndDlg, IDC_EDIT1, criteria, 50);
-            PopulateEmployeeListView(hwndList, &employeeList);
-
+            HWND hwndList = GetDlgItem(hwndDlg, IDC_LIST1);
+            SendMessage(hwndList, LB_RESETCONTENT, 0, 0);
             for (int i = 0; i < employeeList.count; i++) {
-                Employee* employee = &employeeList.employees[i];
-                if (!wcsstr(employee->name, criteria) && !wcsstr(employee->department, criteria) &&
-                    !wcsstr(employee->position, criteria) && employee->id != _wtoi(criteria)) {
-                    ListView_DeleteItem(hwndList, i);
-                    i--; // Adjust index to account for deleted item
+                employee = &employeeList.employees[i];
+                if (wcsstr(employee->name, criteria) || wcsstr(employee->department, criteria) || wcsstr(employee->position, criteria) || employee->id == _wtoi(criteria)) {
+                    wchar_t buffer[200];
+                    swprintf(buffer, 200, L"Name: %ls, ID: %d, Department: %ls, Position: %ls", employee->name, employee->id, employee->department, employee->position);
+                    SendMessage(hwndList, LB_ADDSTRING, 0, (LPARAM)buffer);
                 }
             }
             return TRUE;
@@ -328,252 +335,93 @@ LRESULT CALLBACK SearchEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
     return FALSE;
 }
 
-// Custom window procedure for colored panels
-LRESULT CALLBACK PanelProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    static COLORREF panelColor = RGB(0, 0, 0);
-    static int btnID = 0;
-    static WCHAR* buttonText = NULL;
-    static WCHAR* iconText = NULL;
-
-    switch (message) {
-    case WM_CREATE: {
-        CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
-        LPVOID data = cs->lpCreateParams;
-        if (data) {
-            struct {
-                COLORREF color;
-                int id;
-                WCHAR* text;
-                WCHAR* icon;
-            } *params = (void*)data;
-            panelColor = params->color;
-            btnID = params->id;
-            buttonText = params->text;
-            iconText = params->icon;
-        }
-        break;
-    }
-
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-
-        // Fill the panel with color
-        RECT rect;
-        GetClientRect(hwnd, &rect);
-        HBRUSH hBrush = CreateSolidBrush(panelColor);
-        FillRect(hdc, &rect, hBrush);
-        DeleteObject(hBrush);
-
-        // Draw icon text (centered at top)
-        if (iconText) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            SelectObject(hdc, g_hFontHeader);
-
-            RECT iconRect = rect;
-            iconRect.top = rect.top + (rect.bottom - rect.top) / 4;
-            DrawText(hdc, iconText, -1, &iconRect, DT_CENTER);
-        }
-
-        // Draw button text (centered at bottom)
-        if (buttonText) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            SelectObject(hdc, g_hFontButton);
-
-            RECT textRect = rect;
-            textRect.top = rect.top + (rect.bottom - rect.top) * 3 / 4;
-            DrawText(hdc, buttonText, -1, &textRect, DT_CENTER);
-        }
-
-        EndPaint(hwnd, &ps);
-        return 0;
-    }
-
-    case WM_LBUTTONDOWN:
-        // Send click message to parent
-        if (btnID != 0) {
-            SendMessage(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(btnID, 0), 0);
-        }
-        return 0;
-
-    default:
-        return DefWindowProc(hwnd, message, wParam, lParam);
-    }
-    return 0;
-}
-
-
-// Main window procedure
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
-    case WM_CREATE: {
-        // Initialize common controls
-        INITCOMMONCONTROLSEX icex;
-        icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-        icex.dwICC = ICC_WIN95_CLASSES;
-        InitCommonControlsEx(&icex);
-
-        // Register panel window class
-        WNDCLASS wc = { 0 };
-        wc.lpfnWndProc = PanelProc;
-        wc.hInstance = GetModuleHandle(NULL);
-        wc.lpszClassName = L"ColorPanel";
-        RegisterClass(&wc);
-
-        // Create fonts
-        g_hFontHeader = CreateFont(24, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
-            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
-
-        g_hFontButton = CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-            DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
-            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
-
-        // Create header
-        g_hHeader = CreateWindow(L"STATIC", L"A Company Employee Record",
-            WS_VISIBLE | WS_CHILD | SS_CENTER,
-            10, 10, 380, 40, hwnd, NULL, GetModuleHandle(NULL), NULL);
-
-        // Set header font
-        SendMessage(g_hHeader, WM_SETFONT, (WPARAM)g_hFontHeader, TRUE);
-
-        // Define panel parameters
-        struct {
-            COLORREF color;
-            int id;
-            WCHAR* text;
-            WCHAR* icon;
-        } panel1 = { COLOR_PURPLE, ID_ADD_EMPLOYEE, L"SERVICES", L"⏺" };
-
-        struct {
-            COLORREF color;
-            int id;
-            WCHAR* text;
-            WCHAR* icon;
-        } panel2 = { COLOR_CORAL, ID_UPDATE_EMPLOYEE, L"AUTO", L"⏺" };
-
-        struct {
-            COLORREF color;
-            int id;
-            WCHAR* text;
-            WCHAR* icon;
-        } panel3 = { COLOR_GREEN, ID_VIEW_EMPLOYEE, L"JOB", L"⏺" };
-
-        struct {
-            COLORREF color;
-            int id;
-            WCHAR* text;
-            WCHAR* icon;
-        } panel4 = { COLOR_BLUE, ID_SEARCH_EMPLOYEE, L"Search Employee", L"🔍" };
-
-        // Create colored panels with icons and text
-        g_hPanel1 = CreateWindow(L"ColorPanel", NULL,
-            WS_VISIBLE | WS_CHILD,
-            100, 60, 200, 80, hwnd, NULL, GetModuleHandle(NULL), &panel1);
-
-        g_hPanel2 = CreateWindow(L"ColorPanel", NULL,
-            WS_VISIBLE | WS_CHILD,
-            100, 145, 200, 80, hwnd, NULL, GetModuleHandle(NULL), &panel2);
-
-        g_hPanel3 = CreateWindow(L"ColorPanel", NULL,
-            WS_VISIBLE | WS_CHILD,
-            100, 230, 200, 80, hwnd, NULL, GetModuleHandle(NULL), &panel3);
-
-        g_hPanel4 = CreateWindow(L"ColorPanel", NULL,
-            WS_VISIBLE | WS_CHILD,
-            100, 315, 200, 80, hwnd, NULL, GetModuleHandle(NULL), &panel4);
-
-        // Create exit button at bottom
-        CreateWindow(L"BUTTON", L"Exit",
-            WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            150, 405, 100, 30, hwnd, (HMENU)ID_EXIT, GetModuleHandle(NULL), NULL);
-
+    case WM_CREATE:
+        CreateWindow(L"BUTTON", L"Add Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 20, 150, 30, hwnd, (HMENU)ID_ADD_EMPLOYEE, GetModuleHandle(NULL), NULL);
+        CreateWindow(L"BUTTON", L"Update Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 60, 150, 30, hwnd, (HMENU)ID_UPDATE_EMPLOYEE, GetModuleHandle(NULL), NULL);
+        CreateWindow(L"BUTTON", L"Delete Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 100, 150, 30, hwnd, (HMENU)ID_DELETE_EMPLOYEE, GetModuleHandle(NULL), NULL);
+        CreateWindow(L"BUTTON", L"View Employees", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 140, 150, 30, hwnd, (HMENU)ID_VIEW_EMPLOYEE, GetModuleHandle(NULL), NULL);
+        CreateWindow(L"BUTTON", L"Search Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 180, 150, 30, hwnd, (HMENU)ID_SEARCH_EMPLOYEE, GetModuleHandle(NULL), NULL);
+        CreateWindow(L"BUTTON", L"Exit", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
+            20, 220, 150, 30, hwnd, (HMENU)ID_EXIT, GetModuleHandle(NULL), NULL);
         break;
-    }
-
+    case WM_CTLCOLORBTN:
+    case WM_CTLCOLORDLG:
+    case WM_CTLCOLOREDIT:
+    case WM_CTLCOLORLISTBOX:
     case WM_CTLCOLORSTATIC: {
         HDC hdcStatic = (HDC)wParam;
-        HWND hwndStatic = (HWND)lParam;
-
-        if (hwndStatic == g_hHeader) {
-            SetBkColor(hdcStatic, COLOR_DARK);
-            SetTextColor(hdcStatic, RGB(255, 255, 255));
-            return (INT_PTR)CreateSolidBrush(COLOR_DARK);
-        }
-        return DefWindowProc(hwnd, message, wParam, lParam);
+        SetBkColor(hdcStatic, RGB(0, 0, 0));
+        SetTextColor(hdcStatic, RGB(255, 255, 255));
+        return (INT_PTR)CreateSolidBrush(RGB(0, 0, 0));
     }
-
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case ID_ADD_EMPLOYEE:
-            MessageBox(hwnd, L"Add Employee Selected", L"Action", MB_OK | MB_ICONINFORMATION);
-            // DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ADD_EMPLOYEE), hwnd, AddEmployeeDlgProc);
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ADD_EMPLOYEE), hwnd, AddEmployeeDlgProc);
             break;
         case ID_UPDATE_EMPLOYEE:
-            MessageBox(hwnd, L"Update Employee Selected", L"Action", MB_OK | MB_ICONINFORMATION);
-            // DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_UPDATE_EMPLOYEE);
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc);
+            break;
+        case ID_DELETE_EMPLOYEE:
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DELETE_EMPLOYEE), hwnd, DeleteEmployeeDlgProc);
             break;
         case ID_VIEW_EMPLOYEE:
-            MessageBox(hwnd, L"View Employees Selected", L"Action", MB_OK | MB_ICONINFORMATION);
-            // DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_VIEW_EMPLOYEES), hwnd, ViewEmployeesDlgProc);
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_VIEW_EMPLOYEES), hwnd, ViewEmployeesDlgProc);
             break;
         case ID_SEARCH_EMPLOYEE:
-            MessageBox(hwnd, L"Search Employee Selected", L"Action", MB_OK | MB_ICONINFORMATION);
-            // DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SEARCH_EMPLOYEE), hwnd, SearchEmployeeDlgProc);
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SEARCH_EMPLOYEE), hwnd, SearchEmployeeDlgProc);
             break;
         case ID_EXIT:
             PostQuitMessage(0);
             break;
         }
         break;
-
     case WM_DESTROY:
-        // Clean up resources
-        if (g_hFontHeader) DeleteObject(g_hFontHeader);
-        if (g_hFontButton) DeleteObject(g_hFontButton);
         PostQuitMessage(0);
         break;
-
     default:
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
     return 0;
 }
 
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+    loadEmployeesFromFile(&employeeList);
 
-// WinMain function
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-    // Register window class
-    WNDCLASS wc = { 0 };
+    WNDCLASSEX wc = { 0 };
+    wc.cbSize = sizeof(WNDCLASSEX);
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
-    wc.hbrBackground = CreateSolidBrush(COLOR_DARK);
-    wc.lpszClassName = L"EmployeeRecordApp";
-    RegisterClass(&wc);
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.lpszClassName = L"EmployeeRecordSystem";
 
-    // Create main window
-    HWND hwnd = CreateWindow(
-        L"EmployeeRecordApp", L"K Company Employee Record",
-        WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT, 400, 500,
-        NULL, NULL, hInstance, NULL
-    );
-
-    if (!hwnd) {
-        return 1;
+    if (!RegisterClassEx(&wc)) {
+        MessageBox(NULL, L"Window Registration Failed!", L"Error", MB_ICONEXCLAMATION | MB_OK);
+        return 0;
     }
 
-    // Show window
+    HWND hwnd = CreateWindowEx(0, L"EmployeeRecordSystem", L"Employee Record System",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 400, 300,
+        NULL, NULL, hInstance, NULL);
+
+    if (hwnd == NULL) {
+        MessageBox(NULL, L"Window Creation Failed!", L"Error", MB_ICONEXCLAMATION | MB_OK);
+        return 0;
+    }
+
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);
 
-    // Message loop
     MSG msg = { 0 };
-    while (GetMessage(&msg, NULL, 0, 0)) {
+    while (GetMessage(&msg, NULL, 0, 0) > 0) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
