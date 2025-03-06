@@ -241,7 +241,6 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
             int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
-                if (action == ID_UPDATE_EMPLOYEE) {
                     DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
                         hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
                 }
@@ -256,12 +255,11 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
                         MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
                         PopulateEmployeeListView(hwndList, &employeeList);
                     }
-                }
-            }
             return TRUE;
         }
         break;
     }
+
     return FALSE;
 }
 
@@ -328,84 +326,6 @@ LRESULT CALLBACK SearchEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
     return FALSE;
 }
 
-// Custom window procedure for colored panels
-LRESULT CALLBACK PanelProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
-    static COLORREF panelColor = RGB(0, 0, 0);
-    static int btnID = 0;
-    static WCHAR* buttonText = NULL;
-    static WCHAR* iconText = NULL;
-
-    switch (message) {
-    case WM_CREATE: {
-        CREATESTRUCT* cs = (CREATESTRUCT*)lParam;
-        LPVOID data = cs->lpCreateParams;
-        if (data) {
-            struct {
-                COLORREF color;
-                int id;
-                WCHAR* text;
-                WCHAR* icon;
-            } *params = (void*)data;
-            panelColor = params->color;
-            btnID = params->id;
-            buttonText = params->text;
-            iconText = params->icon;
-        }
-        break;
-    }
-
-    case WM_PAINT: {
-        PAINTSTRUCT ps;
-        HDC hdc = BeginPaint(hwnd, &ps);
-
-        // Fill the panel with color
-        RECT rect;
-        GetClientRect(hwnd, &rect);
-        HBRUSH hBrush = CreateSolidBrush(panelColor);
-        FillRect(hdc, &rect, hBrush);
-        DeleteObject(hBrush);
-
-        // Draw icon text (centered at top)
-        if (iconText) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            SelectObject(hdc, g_hFontHeader);
-
-            RECT iconRect = rect;
-            iconRect.top = rect.top + (rect.bottom - rect.top) / 4;
-            DrawText(hdc, iconText, -1, &iconRect, DT_CENTER);
-        }
-
-        // Draw button text (centered at bottom)
-        if (buttonText) {
-            SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, RGB(255, 255, 255));
-            SelectObject(hdc, g_hFontButton);
-
-            RECT textRect = rect;
-            textRect.top = rect.top + (rect.bottom - rect.top) * 3 / 4;
-            DrawText(hdc, buttonText, -1, &textRect, DT_CENTER);
-        }
-
-        EndPaint(hwnd, &ps);
-        return 0;
-    }
-
-    case WM_LBUTTONDOWN:
-        // Send click message to parent
-        if (btnID != 0) {
-            SendMessage(GetParent(hwnd), WM_COMMAND, MAKEWPARAM(btnID, 0), 0);
-        }
-        return 0;
-
-    default:
-        return DefWindowProc(hwnd, message, wParam, lParam);
-    }
-    return 0;
-}
-
-
-// Main window procedure
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE: {
@@ -506,7 +426,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         }
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
-
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case ID_ADD_EMPLOYEE:
@@ -530,20 +449,14 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             break;
         }
         break;
-
     case WM_DESTROY:
-        // Clean up resources
-        if (g_hFontHeader) DeleteObject(g_hFontHeader);
-        if (g_hFontButton) DeleteObject(g_hFontButton);
         PostQuitMessage(0);
         break;
-
     default:
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
     return 0;
 }
-
 
 // WinMain function
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
@@ -555,7 +468,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     wc.lpszClassName = L"EmployeeRecordApp";
     RegisterClass(&wc);
 
-    // Create main window
+    // Get screen dimensions for centering
+    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+    // Window dimensions based on image proportion
+    int windowWidth = 300;
+    int windowHeight = 450;
+    int windowX = (screenWidth - windowWidth) / 2;
+    int windowY = (screenHeight - windowHeight) / 2;
+
+    // Create main window - with fixed borders to match the image
     HWND hwnd = CreateWindow(
         L"EmployeeRecordApp", L"K Company Employee Record",
         WS_OVERLAPPEDWINDOW,
