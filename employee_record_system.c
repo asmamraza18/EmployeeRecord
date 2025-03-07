@@ -175,6 +175,8 @@ LRESULT CALLBACK UpdateEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
             GetDlgItemText(hwndDlg, IDC_EDIT2, employee->name, 50);
             GetDlgItemText(hwndDlg, IDC_EDIT3, employee->department, 50);
             GetDlgItemText(hwndDlg, IDC_EDIT4, employee->position, 50);
+
+            // Save changes to file
             saveEmployeesToFile(&employeeList);
             MessageBox(hwndDlg, L"Employee updated successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
             EndDialog(hwndDlg, IDOK);
@@ -204,13 +206,17 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
         return TRUE;
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
-            int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
+            int index = ListView_GetNextItem(hwndList, -1, LVNI_SELECTED);
 
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
                 if (action == ID_UPDATE_EMPLOYEE) {
+                    // Make sure you're using the correct dialog resource ID
                     DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
                         hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+
+                    // Refresh the list view after update
+                    PopulateEmployeeListView(hwndList, &employeeList);
                 }
                 else if (action == ID_DELETE_EMPLOYEE) {
                     int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
@@ -237,12 +243,15 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
         break;
     case WM_NOTIFY:
         if (((LPNMHDR)lParam)->code == NM_DBLCLK) {
-            int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
+            int index = ListView_GetNextItem(hwndList, -1, LVNI_SELECTED);
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
                 if (action == ID_UPDATE_EMPLOYEE) {
                     DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
                         hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+
+                    // Refresh the list view after update
+                    PopulateEmployeeListView(hwndList, &employeeList);
                 }
                 else if (action == ID_DELETE_EMPLOYEE) {
                     int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
@@ -515,7 +524,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ADD_EMPLOYEE), hwnd, AddEmployeeDlgProc);
             break;
         case ID_UPDATE_EMPLOYEE:
-            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_UPDATE_EMPLOYEE);
+            DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_UPDATE_EMPLOYEE);
             break;
         case ID_DELETE_EMPLOYEE:
             DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_DELETE_EMPLOYEE);
