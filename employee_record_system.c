@@ -13,6 +13,14 @@
 #define ID_SEARCH_EMPLOYEE 5
 #define ID_EXIT 6
 
+// Define colors similar to the image
+#define COLOR_SERVICES RGB(200, 100, 240)  // Purple
+#define COLOR_AUTO RGB(255, 100, 100)      // Coral/Red
+#define COLOR_JOB RGB(130, 200, 50)        // Green
+#define COLOR_REALTY RGB(50, 150, 255)     // Blue
+#define COLOR_EXIT RGB(100, 100, 100)      // Gray
+#define COLOR_SEARCH RGB(230, 190, 80)     // Yellow/Gold
+
 typedef struct {
     wchar_t name[50];
     int id;
@@ -26,6 +34,15 @@ typedef struct {
 } EmployeeList;
 
 EmployeeList employeeList = { .count = 0 };
+HBRUSH hServicesBrush, hAutoBrush, hJobBrush, hRealtyBrush;
+HFONT hFont;
+
+// Define colors based on the image
+#define COLOR_SERVICES RGB(203, 116, 214)  // Purple
+#define COLOR_AUTO RGB(255, 118, 103)      // Coral/Orange
+#define COLOR_JOB RGB(154, 203, 60)        // Green
+#define COLOR_REALTY RGB(66, 172, 229)     // Blue
+
 
 // Helper function to setup ListView for Employee data
 void SetupEmployeeListView(HWND hwndList) {
@@ -172,35 +189,41 @@ LRESULT CALLBACK UpdateEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
     return FALSE;
 }
 
-// Updated function for SelectEmployeeDlgProc
 LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
     static HWND hwndList;
+    static int action;
 
     switch (message) {
     case WM_INITDIALOG:
-        // Initialize the ListView control
         hwndList = GetDlgItem(hwndDlg, IDC_LIST1);
+        action = (int)lParam;
 
-        // Setup ListView columns
         SetupEmployeeListView(hwndList);
-
-        // Populate ListView with data
         PopulateEmployeeListView(hwndList, &employeeList);
 
         return TRUE;
-
     case WM_COMMAND:
         if (LOWORD(wParam) == IDOK) {
-            // Get selected item from ListView instead of ListBox
             int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
 
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
-                DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
-                    hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
-
-                // Refresh the list after update
-                PopulateEmployeeListView(hwndList, &employeeList);
+                if (action == ID_UPDATE_EMPLOYEE) {
+                    DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
+                        hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+                }
+                else if (action == ID_DELETE_EMPLOYEE) {
+                    int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
+                    if (response == IDYES) {
+                        for (int i = index; i < employeeList.count - 1; i++) {
+                            employeeList.employees[i] = employeeList.employees[i + 1];
+                        }
+                        employeeList.count--;
+                        saveEmployeesToFile(&employeeList);
+                        MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
+                        PopulateEmployeeListView(hwndList, &employeeList);
+                    }
+                }
             }
             else {
                 MessageBox(hwndDlg, L"No employee selected!", L"Error", MB_OK | MB_ICONERROR);
@@ -212,24 +235,32 @@ LRESULT CALLBACK SelectEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
             return TRUE;
         }
         break;
-
     case WM_NOTIFY:
-        // Handle double-click on ListView item
         if (((LPNMHDR)lParam)->code == NM_DBLCLK) {
             int index = SendMessage(hwndList, LVM_GETNEXTITEM, -1, LVNI_SELECTED);
             if (index != -1) {
                 Employee* employee = &employeeList.employees[index];
-                DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
-                    hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
-
-                // Refresh the list after update
-                PopulateEmployeeListView(hwndList, &employeeList);
+                if (action == ID_UPDATE_EMPLOYEE) {
+                    DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_UPDATE_EMPLOYEE),
+                        hwndDlg, UpdateEmployeeDlgProc, (LPARAM)employee);
+                }
+                else if (action == ID_DELETE_EMPLOYEE) {
+                    int response = MessageBox(hwndDlg, L"Are you sure you want to delete this employee?", L"Confirm Delete", MB_YESNO | MB_ICONQUESTION);
+                    if (response == IDYES) {
+                        for (int i = index; i < employeeList.count - 1; i++) {
+                            employeeList.employees[i] = employeeList.employees[i + 1];
+                        }
+                        employeeList.count--;
+                        saveEmployeesToFile(&employeeList);
+                        MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
+                        PopulateEmployeeListView(hwndList, &employeeList);
+                    }
+                }
             }
             return TRUE;
         }
         break;
     }
-
     return FALSE;
 }
 
@@ -240,41 +271,6 @@ void InitializeCommonControls() {
     icex.dwICC = ICC_LISTVIEW_CLASSES;
     InitCommonControlsEx(&icex);
 }
-
-LRESULT CALLBACK DeleteEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
-    static int id;
-    switch (message) {
-    case WM_INITDIALOG:
-        return TRUE;
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK) {
-            id = GetDlgItemInt(hwndDlg, IDC_EDIT1, NULL, FALSE);
-            for (int i = 0; i < employeeList.count; i++) {
-                if (employeeList.employees[i].id == id) {
-                    for (int j = i; j < employeeList.count - 1; j++) {
-                        employeeList.employees[j] = employeeList.employees[j + 1];
-                    }
-                    employeeList.count--;
-                    saveEmployeesToFile(&employeeList);
-                    MessageBox(hwndDlg, L"Employee deleted successfully!", L"Success", MB_OK | MB_ICONINFORMATION);
-                    EndDialog(hwndDlg, IDOK);
-                    return TRUE;
-                }
-            }
-            MessageBox(hwndDlg, L"Employee not found!", L"Error", MB_OK | MB_ICONERROR);
-            EndDialog(hwndDlg, IDCANCEL);
-            return TRUE;
-        }
-        else if (LOWORD(wParam) == IDCANCEL) {
-            EndDialog(hwndDlg, IDCANCEL);
-            return TRUE;
-        }
-        break;
-    }
-    return FALSE;
-}
-
-
 
 // Updated function for ViewEmployeesDlgProc
 LRESULT CALLBACK ViewEmployeesDlgProc(HWND hwndDlg, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -335,42 +331,194 @@ LRESULT CALLBACK SearchEmployeeDlgProc(HWND hwndDlg, UINT message, WPARAM wParam
     return FALSE;
 }
 
+// Create functional buttons with colorful design
+void CreateFunctionalButtons(HWND hwnd) {
+    RECT rect;
+    GetClientRect(hwnd, &rect);
+
+    int width = rect.right - rect.left;
+    int height = (rect.bottom - rect.top) / 6;
+
+    // Create add employee button (purple)
+    CreateWindow(L"BUTTON", L"ADD EMPLOYEE", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, 0, width, height, hwnd, (HMENU)ID_ADD_EMPLOYEE, GetModuleHandle(NULL), NULL);
+
+    // Create update employee button (coral/orange)
+    CreateWindow(L"BUTTON", L"UPDATE EMPLOYEE", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, height, width, height, hwnd, (HMENU)ID_UPDATE_EMPLOYEE, GetModuleHandle(NULL), NULL);
+
+    // Create delete employee button (green)
+    CreateWindow(L"BUTTON", L"DELETE EMPLOYEE", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, height * 2, width, height, hwnd, (HMENU)ID_DELETE_EMPLOYEE, GetModuleHandle(NULL), NULL);
+
+    // Create view employees button (blue)
+    CreateWindow(L"BUTTON", L"VIEW EMPLOYEES", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, height * 3, width, height, hwnd, (HMENU)ID_VIEW_EMPLOYEE, GetModuleHandle(NULL), NULL);
+
+    // Create search employee button (yellow/gold)
+    CreateWindow(L"BUTTON", L"SEARCH EMPLOYEE", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, height * 4, width, height, hwnd, (HMENU)ID_SEARCH_EMPLOYEE, GetModuleHandle(NULL), NULL);
+
+    // Create exit button (gray)
+    CreateWindow(L"BUTTON", L"EXIT", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+        0, height * 5, width, height, hwnd, (HMENU)ID_EXIT, GetModuleHandle(NULL), NULL);
+}
+
+// Draw the custom buttons
+void DrawFunctionalButton(LPDRAWITEMSTRUCT lpDIS) {
+    HDC hdc = lpDIS->hDC;
+    RECT rect = lpDIS->rcItem;
+
+    // Set the color based on button ID
+    COLORREF bgColor;
+    switch (lpDIS->CtlID) {
+    case ID_ADD_EMPLOYEE:
+        bgColor = COLOR_SERVICES; // Purple
+        break;
+    case ID_UPDATE_EMPLOYEE:
+        bgColor = COLOR_AUTO; // Coral/Orange
+        break;
+    case ID_DELETE_EMPLOYEE:
+        bgColor = COLOR_JOB; // Green
+        break;
+    case ID_VIEW_EMPLOYEE:
+        bgColor = COLOR_REALTY; // Blue
+        break;
+    case ID_SEARCH_EMPLOYEE:
+        bgColor = COLOR_SEARCH; // Yellow/Gold
+        break;
+    case ID_EXIT:
+        bgColor = COLOR_EXIT; // Gray
+        break;
+    default:
+        bgColor = RGB(200, 200, 200);
+    }
+
+    // Fill background
+    HBRUSH hBrush = CreateSolidBrush(bgColor);
+    FillRect(hdc, &rect, hBrush);
+    DeleteObject(hBrush);
+
+    // Get button text
+    wchar_t text[50];
+    GetWindowText(lpDIS->hwndItem, text, 50);
+
+    // Set up text properties
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, RGB(255, 255, 255));
+
+    // Save the original font
+    HFONT oldFont = (HFONT)SelectObject(hdc, hFont);
+
+    // Fixed icon size of 32x32
+    const int iconSize = 32;
+    const int spacing = 8;
+
+    // Create icon font (32px height)
+    HFONT iconFont = CreateFont(
+        iconSize, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+        DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+        DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI Symbol"
+    );
+
+    // Calculate positions
+    int totalHeight = iconSize + spacing + 20; // icon + spacing + text
+    int startY = (rect.bottom - rect.top - totalHeight) / 2;
+
+    // Set up icon and text rects
+    RECT iconRect = rect;
+    iconRect.top = startY;
+    iconRect.bottom = iconRect.top + iconSize;
+
+    RECT textRect = rect;
+    textRect.top = iconRect.bottom + spacing;
+    textRect.bottom = rect.bottom;
+
+    // Select icon font
+    SelectObject(hdc, iconFont);
+
+    // Draw icon
+    wchar_t* iconText;
+    switch (lpDIS->CtlID) {
+    case ID_ADD_EMPLOYEE: iconText = L"➕"; break;
+    case ID_UPDATE_EMPLOYEE: iconText = L"➡️"; break;
+    case ID_DELETE_EMPLOYEE: iconText = L"🗑️"; break;
+    case ID_VIEW_EMPLOYEE: iconText = L"👁️"; break;
+    case ID_SEARCH_EMPLOYEE: iconText = L"🔍"; break;
+    case ID_EXIT: iconText = L"❌"; break;
+    default: iconText = L"";
+    }
+    DrawText(hdc, iconText, -1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
+    // Draw text
+    SelectObject(hdc, hFont);
+    DrawText(hdc, text, -1, &textRect, DT_CENTER | DT_TOP | DT_SINGLELINE);
+
+    // Draw focus rect if needed
+    if (lpDIS->itemState & ODS_FOCUS) {
+        DrawFocusRect(hdc, &rect);
+    }
+
+    // Clean up
+    SelectObject(hdc, oldFont);
+    DeleteObject(iconFont);
+}
+
+
+// Window procedure
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
     switch (message) {
     case WM_CREATE:
-        CreateWindow(L"BUTTON", L"Add Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 20, 150, 30, hwnd, (HMENU)ID_ADD_EMPLOYEE, GetModuleHandle(NULL), NULL);
-        CreateWindow(L"BUTTON", L"Update Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 60, 150, 30, hwnd, (HMENU)ID_UPDATE_EMPLOYEE, GetModuleHandle(NULL), NULL);
-        CreateWindow(L"BUTTON", L"Delete Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 100, 150, 30, hwnd, (HMENU)ID_DELETE_EMPLOYEE, GetModuleHandle(NULL), NULL);
-        CreateWindow(L"BUTTON", L"View Employees", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 140, 150, 30, hwnd, (HMENU)ID_VIEW_EMPLOYEE, GetModuleHandle(NULL), NULL);
-        CreateWindow(L"BUTTON", L"Search Employee", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 180, 150, 30, hwnd, (HMENU)ID_SEARCH_EMPLOYEE, GetModuleHandle(NULL), NULL);
-        CreateWindow(L"BUTTON", L"Exit", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-            20, 220, 150, 30, hwnd, (HMENU)ID_EXIT, GetModuleHandle(NULL), NULL);
+        // Create font for buttons
+        hFont = CreateFont(18, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE,
+            DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+            DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+
+        // Initialize Common Controls
+        INITCOMMONCONTROLSEX icex;
+        icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+        icex.dwICC = ICC_LISTVIEW_CLASSES;
+        InitCommonControlsEx(&icex);
+
+        // Create functional buttons
+        CreateFunctionalButtons(hwnd);
         break;
-    case WM_CTLCOLORBTN:
-    case WM_CTLCOLORDLG:
-    case WM_CTLCOLOREDIT:
-    case WM_CTLCOLORLISTBOX:
-    case WM_CTLCOLORSTATIC: {
-        HDC hdcStatic = (HDC)wParam;
-        SetBkColor(hdcStatic, RGB(0, 0, 0));
-        SetTextColor(hdcStatic, RGB(255, 255, 255));
-        return (INT_PTR)CreateSolidBrush(RGB(0, 0, 0));
-    }
+
+    case WM_SIZE:
+        // Resize buttons when window size changes
+        DestroyWindow(GetDlgItem(hwnd, ID_ADD_EMPLOYEE));
+        DestroyWindow(GetDlgItem(hwnd, ID_UPDATE_EMPLOYEE));
+        DestroyWindow(GetDlgItem(hwnd, ID_DELETE_EMPLOYEE));
+        DestroyWindow(GetDlgItem(hwnd, ID_VIEW_EMPLOYEE));
+        DestroyWindow(GetDlgItem(hwnd, ID_SEARCH_EMPLOYEE));
+        DestroyWindow(GetDlgItem(hwnd, ID_EXIT));
+        CreateFunctionalButtons(hwnd);
+        break;
+
+    case WM_DRAWITEM:
+        // Custom draw buttons
+        switch (wParam) {
+        case ID_ADD_EMPLOYEE:
+        case ID_UPDATE_EMPLOYEE:
+        case ID_DELETE_EMPLOYEE:
+        case ID_VIEW_EMPLOYEE:
+        case ID_SEARCH_EMPLOYEE:
+        case ID_EXIT:
+            DrawFunctionalButton((LPDRAWITEMSTRUCT)lParam);
+            return TRUE;
+        }
+        break;
+
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
         case ID_ADD_EMPLOYEE:
             DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_ADD_EMPLOYEE), hwnd, AddEmployeeDlgProc);
             break;
         case ID_UPDATE_EMPLOYEE:
-            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc);
+            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_UPDATE_EMPLOYEE);
             break;
         case ID_DELETE_EMPLOYEE:
-            DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_DELETE_EMPLOYEE), hwnd, DeleteEmployeeDlgProc);
+            DialogBoxParam(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_SELECT_EMPLOYEE), hwnd, SelectEmployeeDlgProc, ID_DELETE_EMPLOYEE);
             break;
         case ID_VIEW_EMPLOYEE:
             DialogBox(GetModuleHandle(NULL), MAKEINTRESOURCE(IDD_VIEW_EMPLOYEES), hwnd, ViewEmployeesDlgProc);
@@ -383,9 +531,13 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             break;
         }
         break;
+
     case WM_DESTROY:
+        // Clean up resources
+        DeleteObject(hFont);
         PostQuitMessage(0);
         break;
+
     default:
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
@@ -393,6 +545,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow) {
+    InitializeCommonControls();
     loadEmployeesFromFile(&employeeList);
 
     WNDCLASSEX wc = { 0 };
@@ -409,7 +562,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLi
     }
 
     HWND hwnd = CreateWindowEx(0, L"EmployeeRecordSystem", L"Employee Record System",
-        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 400, 300,
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 320, 600,
         NULL, NULL, hInstance, NULL);
 
     if (hwnd == NULL) {
